@@ -30,4 +30,80 @@ Amazon Route53 have a feature to alias the domain to the corresponding load bala
 
 ## Let’s Go for Demonstration on NLB
 
-Setting up an Network Load Balancer with AWS EC2
+Setting up an Network Load Balancer with AWS EC2.
+
+### Step 1: Launching Backend EC2 Instances
+To ensure high availability, we launched two t3.micro instances across different Availability Zones: ap-south-1a and ap-south-1b.
+Instance Details:
+```
+    webapp-ap-south-1a: Running in ap-south-1a.
+    webapp-ap-south-1b: Running in ap-south-1b.
+```
+
+We used the following UserData script to install a web server and PHP, creating a page that identifies the specific instance:
+
+```
+#!/bin/bash
+yum update -y
+yum install httpd php -y
+cat <<EOF > /var/www/html/index.php
+<?php
+\$output = shell_exec( 'echo \$HOSTNAME' );
+echo "<h1><center><pre>\$output</pre></center></h1>";
+echo "<h1><center>webapp-ap-south-1b</center></h1>"
+?>
+EOF
+systemctl restart httpd.service && systemctl enable httpd.service
+```
+
+<img width="1903" height="408" alt="Pasted image" src="https://github.com/user-attachments/assets/ad0c6772-28af-4da2-af44-1b48f9b773f6" />
+
+--------------------------------------------------------------------------------
+
+### Step 2: Allocating Static Elastic IPs
+For a predictable entry point, we allocated two Elastic IP addresses from Amazon’s pool. We tagged these as elp1 and elp2 to easily identify them during the load balancer configuration phase,.
+
+<img width="1920" height="1080" alt="Pasted image (4)" src="https://github.com/user-attachments/assets/a18e75ee-df2c-4800-8314-aa7a66a4b418" />
+
+<img width="1886" height="821" alt="Pasted image (5)" src="https://github.com/user-attachments/assets/f0bccb33-0b67-4dff-8a7b-646e7fcf3c30" />
+
+
+--------------------------------------------------------------------------------
+### Step 3: Creating the Target Group
+We created a Target Group specifically for the NLB. Because NLBs operate at Layer 4, we configured the group to use the TCP protocol for the backend instances to ensure efficient traffic handling.
+
+<img width="1904" height="899" alt="Pasted image (6)" src="https://github.com/user-attachments/assets/f0ecadd8-a28a-41e0-a7bd-41f5e961d580" />
+
+
+--------------------------------------------------------------------------------
+### Step 4: Provisioning the Network Load Balancer
+The NLB was created within the VPC vpc-0dc199b2204a7cc14. During the Network Mapping phase, we manually assigned our Elastic IPs to the corresponding subnets:
+
+    In ap-south-1a, we mapped the subnet subnet-0e0c3baca24d97717 to the Elastic IP 13.205.55.116.
+
+<img width="1904" height="899" alt="Pasted image (8)" src="https://github.com/user-attachments/assets/de75547a-3568-446e-af3e-18752cabcb46" />
+
+
+--------------------------------------------------------------------------------
+### Step 5: Route 53 and Functional Verification
+After mapping our domain to the NLB via Route 53, we verified that the load balancer was correctly distributing traffic between the two AZs.
+
+    Instance 1a Response: Displays the internal hostname ip-172-31-44-215.ap-south-1.compute.internal.
+    Instance 1b Response: Displays the internal hostname ip-172-31-6-76.ap-south-1.compute.internal.
+
+<img width="1904" height="899" alt="Pasted image (9)" src="https://github.com/user-attachments/assets/afcb84ac-fb07-4769-bfa8-56964c74e15a" />
+
+--------------------------------------------------------------------------------
+### The NLB Advantage: Source IP Preservation
+A critical feature of the Network Load Balancer is that it does not perform Network Address Translation (NAT) for the source IP. By examining the Apache access logs on the backend instance, we can confirm that the user's actual public IP address is passed directly to the server.
+Backend Log Analysis:
+
+```
+[root@ip-172-31-44-215 ~]# cat /var/log/httpd/access_log | grep -v "ELB-HealthChecker/2.0"
+117.251.48.189 - - [02/Mar/2026:06:38:08 +0000] "GET / HTTP/1.1" 200 126 "-" "Mozilla/5.0..."
+117.251.48.189 - - [02/Mar/2026:06:43:49 +0000] "GET / HTTP/1.1" 200 126 "-" "Mozilla/5.0..."
+```
+
+As seen in the logs, the IP 117.251.48.189 (the user's public IP) is recorded directly. This confirms that no NATing is happening at the load balancer level, allowing your backend applications to see the real client identity without needing complex headers like X-Forwarded-For.
+
+<img width="1904" height="968" alt="Pasted image (10)" src="https://github.com/user-attachments/assets/7adf6f54-78fe-4081-bec0-1932c8193c6b" />
