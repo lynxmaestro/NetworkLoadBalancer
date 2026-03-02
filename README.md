@@ -72,7 +72,8 @@ For a predictable entry point, we allocated two Elastic IP addresses from Amazon
 ### Step 3: Creating the Target Group
 We created a Target Group specifically for the NLB. Because NLBs operate at Layer 4, we configured the group to use the TCP protocol for the backend instances to ensure efficient traffic handling.
 
-<img width="1904" height="899" alt="Pasted image (6)" src="https://github.com/user-attachments/assets/f0ecadd8-a28a-41e0-a7bd-41f5e961d580" />
+<img width="1919" height="935" alt="image" src="https://github.com/user-attachments/assets/47e709c8-51a0-4a69-8e9d-9ea09457f7d8" />
+
 
 
 --------------------------------------------------------------------------------
